@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f0f2f5;
+        }
+        .input-section, .strategy-section {
+            background-color: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .input-section input {
+            width: 120px;
+        }
+        table input {
+            width: 85px;
+        }
+        label {
+            display: inline-block;
+            width: 150px;
+            margin-right: 10px;
+            color: #333;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            min-width: 800px;
+            table-layout: fixed;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        th:nth-child(1), td:nth-child(1) { width: 12%; }  /* Exit Price */
+        th:nth-child(2), td:nth-child(2) { width: 8%; }   /* % to Target */
+        th:nth-child(3), td:nth-child(3) { width: 10%; }  /* % of Coins */
+        th:nth-child(4), td:nth-child(4) { width: 15%; }  /* Coins */
+        th:nth-child(5), td:nth-child(5) { width: 15%; }  /* Value */
+        th:nth-child(6), td:nth-child(6) { width: 20%; }  /* MCap Exit */
+        th:nth-child(7), td:nth-child(7) { width: 20%; }  /* Remaining */
+        
+        th {
+            background-color: #f8f9fa;
+            color: #333;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        .editable {
+            background-color: #fff8dc;
+        }
+        .summary {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #e8f4ff;
+            border-radius: 8px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .mcap-highlight {
+            color: #28a745;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>DCA-Out Strategy Calculator</h1>
+    
+    <div class="input-section">
+        <div class="input-group">
+            <label>Entry Price ($):</label>
+            <input type="number" id="entryPrice" value="24" step="0.000001">
+        </div>
+        <div class="input-group">
+            <label>Target Price ($):</label>
+            <input type="number" id="targetPrice" value="100" step="0.000001">
+        </div>
+        <div class="input-group">
+            <label>Total Coins:</label>
+            <input type="number" id="totalCoins" value="15000">
+        </div>
+        <div class="input-group">
+            <label>Stop Loss ($):</label>
+            <input type="number" id="stopLoss" value="20" step="0.000001">
+        </div>
+        <div class="input-group">
+            <label>Total Supply:</label>
+            <input type="number" id="totalSupply" value="334333333">
+        </div>
+        <button onclick="calculateAll()">Calculate All Strategies</button>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        function formatNumber(num) {
+            return new Intl.NumberFormat('en-US').format(num);
+        }
+
+        function calculateMcap(price, totalSupply) {
+            return price * totalSupply;
+        }
+
+        function calculatePriceFromTargetPercent(entryPrice, targetPrice, percent) {
+            const priceDiff = targetPrice - entryPrice;
+            return entryPrice + (priceDiff * percent / 100);
+        }
+
+        function calculateTargetPercent(price, entryPrice, targetPrice) {
+            return ((price - entryPrice) / (targetPrice - entryPrice) * 100).toFixed(1);
+        }
+
+        function createStrategySection(title, id, strategy) {
+            const section = document.createElement('div');
+            section.className = 'strategy-section';
+            section.innerHTML = `
+                <h2>${title}</h2>
+                <div style="overflow-x: auto;">
+                    <table id="${id}Table">
+                        <thead>
+                            <tr>
+                                <th>Exit Price ($)</th>
+                                <th>% to Target</th>
+                                <th>% of Coins</th>
+                                <th>Coins Sold</th>
+                                <th>Value ($)</th>
+                                <th>Market Cap at Exit</th>
+                                <th>Remaining Coins</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="summary" id="${id}Summary"></div>
+                <button onclick="recalculateStrategy('${id}')">Update Strategy</button>
+            `;
+            return section;
+        }
+
+        function updateStrategyTable(id, strategy) {
+            const table = document.getElementById(`${id}Table`).getElementsByTagName('tbody')[0];
+            const entryPrice = parseFloat(document.getElementById('entryPrice').value);
+            const targetPrice = parseFloat(document.getElementById('targetPrice').value);
+            table.innerHTML = '';
+            
+            strategy.exits.forEach((exit, index) => {
+                const row = table.insertRow();
+                const exitPrice = calculatePriceFromTargetPercent(entryPrice, targetPrice, exit.targetPercent);
+                
+                row.innerHTML = `
+                    <td><input type="number" class="editable exit-price" value="${exitPrice.toFixed(6)}" step="0.000001"></td>
+                    <td><input type="number" class="editable target-percent" value="${exit.targetPercent}" step="0.1"></td>
+                    <td><input type="number" class="editable coins-percent" value="${exit.percent}" step="1"></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td class="mcap-highlight"></td>
+                `;
+            });
+        }
+
+        function recalculateStrategy(id) {
+            const table = document.getElementById(`${id}Table`);
+            const rows = table.getElementsByTagName('tbody')[0].rows;
+            const exits = [];
+            let totalPercent = 0;
+
+            for (let row of rows) {
+                const price = parseFloat(row.cells[0].getElementsByTagName('input')[0].value);
+                const percent = parseFloat(row.cells[2].getElementsByTagName('input')[0].value);
+                totalPercent += percent;
+                exits.push({ price, percent });
+            }
+
+            if (Math.abs(totalPercent - 100) > 0.01) {
+                alert('Total percentage must equal 100%');
+                return;
+            }
+
+            calculateStrategy(id, { exits });
+        }
+
+        function calculateStrategy(id, strategy) {
+            const totalCoins = parseFloat(document.getElementById('totalCoins').value);
+            const entryPrice = parseFloat(document.getElementById('entryPrice').value);
+            const targetPrice = parseFloat(document.getElementById('targetPrice').value);
+            const totalSupply = parseFloat(document.getElementById('totalSupply').value);
+            const table = document.getElementById(`${id}Table`).getElementsByTagName('tbody')[0];
+            
+            let remainingCoins = totalCoins;
+            let totalValue = 0;
+            let weightedExitPrice = 0;
+
+            strategy.exits.forEach((exit, index) => {
+                const coinsToSell = totalCoins * (exit.percent / 100);
+                const value = coinsToSell * exit.price;
+                remainingCoins -= coinsToSell;
+                totalValue += value;
+                weightedExitPrice += (exit.price * (exit.percent / 100));
+                const mcapExit = calculateMcap(exit.price, totalSupply);
+
+                const row = table.rows[index];
+                row.cells[3].textContent = formatNumber(coinsToSell.toFixed(2));
+                row.cells[4].textContent = `$${formatNumber(value.toFixed(2))}`;
+                row.cells[5].textContent = `$${formatNumber(mcapExit)}`;
+                row.cells[6].textContent = formatNumber(remainingCoins.toFixed(2));
+            });
+
+            const initialValue = totalCoins * entryPrice;
+            const profit = ((totalValue - initialValue) / initialValue * 100).toFixed(2);
+            
+            document.getElementById(`${id}Summary`).innerHTML = `
+                Initial Investment: $${formatNumber(initialValue.toFixed(2))}<br>
+                Total Value After Exits: $${formatNumber(totalValue.toFixed(2))}<br>
+                Average Exit Price: $${weightedExitPrice.toFixed(6)}<br>
+                Total Profit: ${profit}%<br>
+                Remaining Coins: ${formatNumber(remainingCoins.toFixed(2))}
+            `;
+        }
+
+        function calculateAll() {
+            const strategies = {
+                'conservative': {
+                    title: 'Conservative Exit Strategy',
+                    exits: [
+                        { targetPercent: 25, percent: 20 },
+                        { targetPercent: 50, percent: 30 },
+                        { targetPercent: 75, percent: 30 },
+                        { targetPercent: 100, percent: 20 }
+                    ]
+                },
+                'aggressive': {
+                    title: 'Aggressive Exit Strategy',
+                    exits: [
+                        { targetPercent: 50, percent: 40 },
+                        { targetPercent: 75, percent: 40 },
+                        { targetPercent: 100, percent: 20 }
+                    ]
+                },
+                'tiered': {
+                    title: 'Tiered Exit Strategy',
+                    exits: [
+                        { targetPercent: 20, percent: 10 },
+                        { targetPercent: 40, percent: 15 },
+                        { targetPercent: 60, percent: 25 },
+                        { targetPercent: 80, percent: 25 },
+                        { targetPercent: 100, percent: 25 }
+                    ]
+                },
+                'hodl': {
+                    title: 'HODL Strategy',
+                    exits: [
+                        { targetPercent: 100, percent: 100 }
+                    ]
+                }
+            };
+
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '';
+
+            Object.entries(strategies).forEach(([id, strategy]) => {
+                const section = createStrategySection(strategy.title, id, strategy);
+                resultsDiv.appendChild(section);
+                updateStrategyTable(id, strategy);
+                calculateStrategy(id, strategy);
+            });
+        }
+
+        // Calculate on page load
+        calculateAll();
+    </script>
+</body>
+</html>
