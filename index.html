@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <title>DCA-Out Strategy Calculator</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -52,13 +53,13 @@
             text-overflow: ellipsis;
             white-space: nowrap;
         }
-        th:nth-child(1), td:nth-child(1) { width: 12%; }  /* Exit Price */
-        th:nth-child(2), td:nth-child(2) { width: 8%; }   /* % to Target */
-        th:nth-child(3), td:nth-child(3) { width: 10%; }  /* % of Coins */
-        th:nth-child(4), td:nth-child(4) { width: 15%; }  /* Coins */
-        th:nth-child(5), td:nth-child(5) { width: 15%; }  /* Value */
-        th:nth-child(6), td:nth-child(6) { width: 20%; }  /* MCap Exit */
-        th:nth-child(7), td:nth-child(7) { width: 20%; }  /* Remaining */
+        th:nth-child(1), td:nth-child(1) { width: 12%; }
+        th:nth-child(2), td:nth-child(2) { width: 8%; }
+        th:nth-child(3), td:nth-child(3) { width: 10%; }
+        th:nth-child(4), td:nth-child(4) { width: 15%; }
+        th:nth-child(5), td:nth-child(5) { width: 15%; }
+        th:nth-child(6), td:nth-child(6) { width: 20%; }
+        th:nth-child(7), td:nth-child(7) { width: 20%; }
         
         th {
             background-color: #f8f9fa;
@@ -119,11 +120,39 @@
             <input type="number" id="totalSupply" value="334333333">
         </div>
         <button onclick="calculateAll()">Calculate All Strategies</button>
+        <button onclick="saveInputs()">Save Inputs</button>
     </div>
 
     <div id="results"></div>
 
     <script>
+        // Load saved inputs on page load
+        function loadSavedInputs() {
+            const savedInputs = JSON.parse(localStorage.getItem('dcaCalculatorInputs') || '{}');
+            const inputs = ['entryPrice', 'targetPrice', 'totalCoins', 'stopLoss', 'totalSupply'];
+            
+            inputs.forEach(id => {
+                const element = document.getElementById(id);
+                if (savedInputs[id]) {
+                    element.value = savedInputs[id];
+                }
+            });
+        }
+
+        // Save current inputs to localStorage
+        function saveInputs() {
+            const inputs = {
+                entryPrice: document.getElementById('entryPrice').value,
+                targetPrice: document.getElementById('targetPrice').value,
+                totalCoins: document.getElementById('totalCoins').value,
+                stopLoss: document.getElementById('stopLoss').value,
+                totalSupply: document.getElementById('totalSupply').value
+            };
+            
+            localStorage.setItem('dcaCalculatorInputs', JSON.stringify(inputs));
+            alert('Inputs saved successfully!');
+        }
+
         function formatNumber(num) {
             return new Intl.NumberFormat('en-US').format(num);
         }
@@ -297,7 +326,8 @@
             });
         }
 
-        // Calculate on page load
+        // Load saved inputs and calculate on page load
+        loadSavedInputs();
         calculateAll();
     </script>
 </body>
